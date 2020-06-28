@@ -10,6 +10,13 @@ class Item(Resource):
 
     @jwt_required()
     def get(self, name):
+        item = self.find_by_name(name)
+        if item:
+            return item, 200
+        return {'message': 'Item not found!'}, 404
+
+    @classmethod
+    def find_by_name(cls, name):
         connection = sqlite3.connect('data.db')
         cursor = connection.cursor()
 
@@ -19,22 +26,25 @@ class Item(Resource):
         connection.close()
 
         if row:
-            return {'item': {'name': row[0], 'price': row[1]}}, 200
-        return {'message': 'Item not found!'}, 404
+            return {'item': {'name': row[0], 'price': row[1]}}
 
     def post(self, name):
-        # in the below line inside paranthesis can add : force=True to force to send JSON only or silent=True to not give error even when json is not returned
-        # data = request.get_json()
-
-        if next(filter(lambda x: x['name'] == name, items), None) is not None:
-            # 400 is bad request
+        if self.find_by_name(name):
             return {'message': 'An item with name {} already exists.'.format(name)}, 400
 
         data = Item.parser.parse_args()
 
         item = {'name': name, 'price': data['price']}
-        items.append(item)
-        return item, 201  # 201 stands for created
+
+        connection = sqlite3.connect('data.db')
+        cursor = connection.cursor()
+        query = "INSERT INTO items VALUES (?, ?)"
+        cursor.execute(query, (item['name'], item['price']))
+
+        connection.commit()
+        connection.close()
+
+        return item, 201
 
     def delete(self, name):
         global items
