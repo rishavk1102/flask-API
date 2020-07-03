@@ -28,6 +28,26 @@ class Item(Resource):
         if row:
             return {'item': {'name': row[0], 'price': row[1]}}
 
+    @classmethod
+    def insert(cls, item):
+        connection = sqlite3.connect('data.db')
+        cursor = connection.cursor()
+        query = "INSERT INTO items VALUES (?, ?)"
+        cursor.execute(query, (item['name'], item['price']))
+
+        connection.commit()
+        connection.close()
+
+    @classmethod
+    def update(cls, item):
+        connection = sqlite3.connect('data.db')
+        cursor = connection.cursor()
+        query = "UPDATE items SET price=? WHERE name=?"
+        cursor.execute(query, (item['price'], item['name']))
+
+        connection.commit()
+        connection.close()
+
     def post(self, name):
         if self.find_by_name(name):
             return {'message': 'An item with name {} already exists.'.format(name)}, 400
@@ -36,13 +56,10 @@ class Item(Resource):
 
         item = {'name': name, 'price': data['price']}
 
-        connection = sqlite3.connect('data.db')
-        cursor = connection.cursor()
-        query = "INSERT INTO items VALUES (?, ?)"
-        cursor.execute(query, (item['name'], item['price']))
-
-        connection.commit()
-        connection.close()
+        try:
+            self.insert(item)
+        except:
+            return {'message': 'Error occured while entering the data to our database'}, 500
 
         return item, 201
 
@@ -60,16 +77,31 @@ class Item(Resource):
     def put(self, name):
         data = Item.parser.parse_args()
 
-        item = next(filter(lambda x: x['name'] == name, items), None)
-        if item is None:
-            item = {'name': name, 'price': data['price']}
-            items.append(item)
-        else:
-            item.update(data)
+        item = self.find_by_name(name)
+        updated_item = {'name': name, 'price': data['price']}
 
-        return item
+        if item is None:
+            try:
+                self.insert(updated_item)
+            except:
+                return {'message': 'An error occured in inserting item.'}, 500
+        else:
+            try:
+                self.update(updated_item)
+            except:
+                return {'message': 'An error occured in updating item.'}, 500
+
+        return updated_item
 
 
 class ItemList(Resource):
     def get(self):
-        return {'items': items}
+        connection = sqlite3.connect('data.db')
+        cursor = connection.cursor()
+        query = "SELECT * FROM items"
+        result = cursor.execute(query)
+        items = []
+        for row in result:
+            items.append({'name': row[0], 'price': row[1]})
+
+        return {'items': items}, 200
